@@ -84,6 +84,9 @@ async def upload(file: UploadFile = File(...)):
         if re.match(r'\d{2}/\d{2}/\d{2}', line):
             if current_block:
                 parsed = parse_row(current_block)
+                if parsed["date"] == "" or "Date" in parsed["text"]:
+                    continue
+
                 print("BLOCK:", current_block)
                 print("PARSED:", parsed)
                 print("------")
@@ -92,6 +95,7 @@ async def upload(file: UploadFile = File(...)):
             current_block = line
         else:
             current_block += " " + line
+
 
     # last block
     if current_block:
