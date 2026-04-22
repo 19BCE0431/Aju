@@ -7,39 +7,44 @@ app = FastAPI()
 
 documents = []
 
-
-def parse_row(line):
+def parse_row(text):
     import re
 
-    # ---- DATE ----
-    date_match = re.search(r'\d{2}/\d{2}/\d{2}', line)
-    date = date_match.group() if date_match else None
+    # Remove extra spaces
+    text = " ".join(text.split())
 
-    # ---- NUMBERS ----
-    nums = re.findall(r'\d{1,3}(?:,\d{3})*\.\d{2}', line)
-    nums = [float(n.replace(',', '')) for n in nums]
+    # Extract date
+    date_match = re.search(r"\d{2}/\d{2}/\d{2}", text)
+    date = date_match.group() if date_match else ""
 
-    debit, credit, balance = 0.0, 0.0, 0.0
+    # Extract all numbers (amounts)
+    numbers = re.findall(r"\d{1,3}(?:,\d{3})*(?:\.\d{2})", text)
+    numbers = [float(n.replace(",", "")) for n in numbers]
 
-    if len(nums) >= 1:
-        balance = nums[-1]
+    debit = 0
+    credit = 0
+    balance = 0
 
-    if len(nums) >= 2:
-        amount = nums[-2]
-
-        # Heuristic:
-        # If line contains words like "UPI", "PAYMENT", "TO" → debit
-        # Else → credit
-
-        if any(word in line.upper() for word in ["UPI", "PAYMENT", "TO", "DR"]):
-            debit = amount
+    if len(numbers) == 2:
+        # Could be debit OR credit + balance
+        if numbers[0] < numbers[1]:
+            debit = numbers[0]
         else:
-            credit = amount
+            credit = numbers[0]
+        balance = numbers[1]
 
-    # ---- NAME CLEANING ----
-    name = re.sub(r'\d{2}/\d{2}/\d{2}', '', line)
-    name = re.sub(r'\d{1,3}(?:,\d{3})*\.\d{2}', '', name)
-    name = re.sub(r'\s+', ' ', name).strip()
+    elif len(numbers) == 3:
+        debit = numbers[0]
+        credit = numbers[1]
+        balance = numbers[2]
+
+    # Remove date + numbers to get name
+    name = re.sub(r"\d{2}/\d{2}/\d{2}", "", text)
+    for num in numbers:
+        name = name.replace(f"{num:,.2f}", "")
+        name = name.replace(str(int(num)), "")
+
+    name = name.strip()
 
     return {
         "date": date,
@@ -47,7 +52,7 @@ def parse_row(line):
         "debit": debit,
         "credit": credit,
         "balance": balance,
-        "text": line
+        "text": text
     }
 
 @app.post("/upload")
