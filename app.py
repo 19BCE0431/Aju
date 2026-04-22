@@ -39,7 +39,20 @@ if query:
     data = res.json()
 
     if "results" in data:
+        # df = pd.DataFrame(data["results"])
+
+        # st.subheader("📋 Results")
+
+        # st.dataframe(df[["date", "name", "debit", "credit", "balance"]])
+
         df = pd.DataFrame(data["results"])
+
+# 🔥 FIX 1: Replace None with 0
+        df = df.fillna(0)
+
+# 🔥 FIX 2: Convert numeric columns properly
+        for col in ["debit", "credit", "balance"]:
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
         st.subheader("📋 Results")
 
