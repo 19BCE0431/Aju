@@ -50,33 +50,48 @@ def parse_row(line):
         "text": line
     }
 
-
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
     global documents
     documents = []
 
+    import fitz
+    import re
+
     content = await file.read()
     doc = fitz.open(stream=content, filetype="pdf")
 
+    lines = []
+
     for page in doc:
         text = page.get_text()
-        lines = text.split("\n")
+        lines.extend(text.split("\n"))
 
-        # for line in lines:
-        #     if re.search(r'\d{2}/\d{2}/\d{2}', line):
-        #         documents.append(parse_row(line))
+    current_block = ""
 
-        for line in lines:
-            if re.search(r'\d{2}/\d{2}/\d{2}', line):
-                parsed = parse_row(line)
-        
-                # 🔥 DEBUG PRINT
-                print("RAW LINE:", line)
+    for line in lines:
+        line = line.strip()
+
+        if not line:
+            continue
+
+        # If new date starts → process previous block
+        if re.match(r'\d{2}/\d{2}/\d{2}', line):
+            if current_block:
+                parsed = parse_row(current_block)
+                print("BLOCK:", current_block)
                 print("PARSED:", parsed)
                 print("------")
-        
                 documents.append(parsed)
+
+            current_block = line
+        else:
+            current_block += " " + line
+
+    # last block
+    if current_block:
+        parsed = parse_row(current_block)
+        documents.append(parsed)
 
     return {"message": f"{len(documents)} rows processed"}
 
