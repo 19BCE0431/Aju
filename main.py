@@ -10,15 +10,21 @@ documents = []
 def parse_row(text):
     import re
 
-    # Remove extra spaces
     text = " ".join(text.split())
+
+    # Skip header rows
+    if "Date" in text and "Balance" in text:
+        return None
 
     # Extract date
     date_match = re.search(r"\d{2}/\d{2}/\d{2}", text)
-    date = date_match.group() if date_match else ""
+    if not date_match:
+        return None
 
-    # Extract all numbers (amounts)
-    numbers = re.findall(r"\d{1,3}(?:,\d{3})*(?:\.\d{2})", text)
+    date = date_match.group()
+
+    # Extract amounts (strict format)
+    numbers = re.findall(r"\d{1,3}(?:,\d{3})+\.\d{2}", text)
     numbers = [float(n.replace(",", "")) for n in numbers]
 
     debit = 0
@@ -26,23 +32,29 @@ def parse_row(text):
     balance = 0
 
     if len(numbers) == 2:
-        # Could be debit OR credit + balance
-        if numbers[0] < numbers[1]:
+        # One transaction + balance
+        if "UPI" in text or "PAY" in text:
             debit = numbers[0]
         else:
             credit = numbers[0]
         balance = numbers[1]
 
-    elif len(numbers) == 3:
+    elif len(numbers) >= 3:
         debit = numbers[0]
         credit = numbers[1]
-        balance = numbers[2]
+        balance = numbers[-1]
 
-    # Remove date + numbers to get name
-    name = re.sub(r"\d{2}/\d{2}/\d{2}", "", text)
-    for num in numbers:
-        name = name.replace(f"{num:,.2f}", "")
-        name = name.replace(str(int(num)), "")
+    # Remove numbers + date to get clean name
+    name = text
+
+    name = re.sub(r"\d{2}/\d{2}/\d{2}", "", name)
+
+    for n in numbers:
+        formatted = f"{n:,.2f}"
+        name = name.replace(formatted, "")
+
+    # Remove leftover small numbers (like 6, 5)
+    name = re.sub(r"\b\d+\b", "", name)
 
     name = name.strip()
 
@@ -52,7 +64,7 @@ def parse_row(text):
         "debit": debit,
         "credit": credit,
         "balance": balance,
-        "text": text
+        "text": text.lower()
     }
 
 @app.post("/upload")
@@ -84,8 +96,9 @@ async def upload(file: UploadFile = File(...)):
         if re.match(r'\d{2}/\d{2}/\d{2}', line):
             if current_block:
                 parsed = parse_row(current_block)
-                if parsed["date"] == "" or "Date" in parsed["text"]:
-                    continue
+
+                if parsed is not None:
+                    documents.append(parsed)
 
                 print("BLOCK:", current_block)
                 print("PARSED:", parsed)
@@ -105,23 +118,35 @@ async def upload(file: UploadFile = File(...)):
     return {"message": f"{len(documents)} rows processed"}
 
 
+# @app.get("/search")
+# def search_api(q: str):
+#     if not documents:
+#         return {"error": "Upload PDF first"}
+
+#     scored = []
+#     for doc in documents:
+#         score = fuzz.partial_ratio(q.lower(), doc["text"].lower())
+#         scored.append((score, doc))
+
+#     scored.sort(reverse=True, key=lambda x: x[0])
+
+#     results = [item[1] for item in scored[:10]]
+
+#     total_credit = sum([r["credit"] or 0 for r in results])
+
+#     return {
+#         "results": results,
+#         "total_credit": total_credit
+#     }
+
 @app.get("/search")
-def search_api(q: str):
-    if not documents:
-        return {"error": "Upload PDF first"}
+def search(q: str):
+    q = q.lower().strip()
 
-    scored = []
+    results = []
+
     for doc in documents:
-        score = fuzz.partial_ratio(q.lower(), doc["text"].lower())
-        scored.append((score, doc))
+        if q in doc["name"].lower():
+            results.append(doc)
 
-    scored.sort(reverse=True, key=lambda x: x[0])
-
-    results = [item[1] for item in scored[:10]]
-
-    total_credit = sum([r["credit"] or 0 for r in results])
-
-    return {
-        "results": results,
-        "total_credit": total_credit
-    }
+    return results
