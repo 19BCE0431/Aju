@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 
 # 🔥 CHANGE THIS AFTER DEPLOYMENT
-API_URL = "https://your-backend-url.up.railway.app"
+API_URL = "https://aju-production.up.railway.app"
 
 st.set_page_config(page_title="PDF Smart Search", layout="wide")
 
