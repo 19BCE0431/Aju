@@ -1,10 +1,8 @@
 fastapi
 uvicorn
 pymupdf
-sentence-transformers
-faiss-cpu
-numpy
 python-multipart
-streamlit
+rapidfuzz
 pandas
+streamlit
 requests
