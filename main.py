@@ -9,16 +9,28 @@ documents = []
 
 
 def parse_row(line):
+    import re
+
+    # date
     date_match = re.search(r'\d{2}/\d{2}/\d{2}', line)
     date = date_match.group() if date_match else None
 
+    # extract numbers
     nums = re.findall(r'\d{1,3}(?:,\d{3})*\.\d{2}', line)
     nums = [float(n.replace(',', '')) for n in nums]
 
     debit, credit, balance = None, None, None
-    if len(nums) >= 3:
+
+    if len(nums) == 3:
         debit, credit, balance = nums[-3], nums[-2], nums[-1]
 
+    elif len(nums) == 2:
+        credit, balance = nums[-2], nums[-1]
+
+    elif len(nums) == 1:
+        balance = nums[-1]
+
+    # extract name
     name = re.sub(r'\d{2}/\d{2}/\d{2}', '', line)
     name = re.sub(r'\d{1,3}(?:,\d{3})*\.\d{2}', '', name)
     name = name.strip()
