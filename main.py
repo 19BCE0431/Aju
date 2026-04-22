@@ -1,152 +1,67 @@
 from fastapi import FastAPI, UploadFile, File
-import fitz
-import re
-from rapidfuzz import fuzz
+import pdfplumber
 
 app = FastAPI()
 
 documents = []
-
-def parse_row(text):
-    import re
-
-    text = " ".join(text.split())
-
-    # Skip header rows
-    if "Date" in text and "Balance" in text:
-        return None
-
-    # Extract date
-    date_match = re.search(r"\d{2}/\d{2}/\d{2}", text)
-    if not date_match:
-        return None
-
-    date = date_match.group()
-
-    # Extract amounts (strict format)
-    numbers = re.findall(r"\d{1,3}(?:,\d{3})+\.\d{2}", text)
-    numbers = [float(n.replace(",", "")) for n in numbers]
-
-    debit = 0
-    credit = 0
-    balance = 0
-
-    if len(numbers) == 2:
-        # One transaction + balance
-        if "UPI" in text or "PAY" in text:
-            debit = numbers[0]
-        else:
-            credit = numbers[0]
-        balance = numbers[1]
-
-    elif len(numbers) >= 3:
-        debit = numbers[0]
-        credit = numbers[1]
-        balance = numbers[-1]
-
-    # Remove numbers + date to get clean name
-    name = text
-
-    name = re.sub(r"\d{2}/\d{2}/\d{2}", "", name)
-
-    for n in numbers:
-        formatted = f"{n:,.2f}"
-        name = name.replace(formatted, "")
-
-    # Remove leftover small numbers (like 6, 5)
-    name = re.sub(r"\b\d+\b", "", name)
-
-    name = name.strip()
-
-    return {
-        "date": date,
-        "name": name,
-        "debit": debit,
-        "credit": credit,
-        "balance": balance,
-        "text": text.lower()
-    }
 
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
     global documents
     documents = []
 
-    import fitz
-    import re
+    import tempfile
 
-    content = await file.read()
-    doc = fitz.open(stream=content, filetype="pdf")
+    # Save temp file
+    with tempfile.NamedTemporaryFile(delete=False) as tmp:
+        tmp.write(await file.read())
+        tmp_path = tmp.name
 
-    lines = []
+    with pdfplumber.open(tmp_path) as pdf:
+        for page in pdf.pages:
+            tables = page.extract_tables()
 
-    for page in doc:
-        text = page.get_text()
-        lines.extend(text.split("\n"))
+            for table in tables:
+                for row in table:
+                    if not row or len(row) < 6:
+                        continue
 
-    current_block = ""
+                    try:
+                        date = row[0]
+                        name = row[1]
 
-    for line in lines:
-        line = line.strip()
+                        # Skip headers
+                        if "Date" in str(date):
+                            continue
 
-        if not line:
-            continue
+                        # Clean values
+                        debit = float(row[4].replace(",", "")) if row[4] else 0
+                        credit = float(row[5].replace(",", "")) if row[5] else 0
+                        balance = float(row[6].replace(",", "")) if len(row) > 6 and row[6] else 0
 
-        # If new date starts → process previous block
-        if re.match(r'\d{2}/\d{2}/\d{2}', line):
-            if current_block:
-                parsed = parse_row(current_block)
+                        documents.append({
+                            "date": date,
+                            "name": name.strip(),
+                            "debit": debit,
+                            "credit": credit,
+                            "balance": balance
+                        })
 
-                if parsed is not None:
-                    documents.append(parsed)
-
-                print("BLOCK:", current_block)
-                print("PARSED:", parsed)
-                print("------")
-                documents.append(parsed)
-
-            current_block = line
-        else:
-            current_block += " " + line
-
-
-    # last block
-    if current_block:
-        parsed = parse_row(current_block)
-        documents.append(parsed)
+                    except:
+                        continue
 
     return {"message": f"{len(documents)} rows processed"}
 
-
-# @app.get("/search")
-# def search_api(q: str):
-#     if not documents:
-#         return {"error": "Upload PDF first"}
-
-#     scored = []
-#     for doc in documents:
-#         score = fuzz.partial_ratio(q.lower(), doc["text"].lower())
-#         scored.append((score, doc))
-
-#     scored.sort(reverse=True, key=lambda x: x[0])
-
-#     results = [item[1] for item in scored[:10]]
-
-#     total_credit = sum([r["credit"] or 0 for r in results])
-
-#     return {
-#         "results": results,
-#         "total_credit": total_credit
-#     }
 
 @app.get("/search")
 def search(q: str):
     q = q.lower().strip()
 
-    results = []
+    results = [doc for doc in documents if q in doc["name"].lower()]
 
-    for doc in documents:
-        if q in doc["name"].lower():
-            results.append(doc)
+    total_credit = sum(r["credit"] for r in results)
 
-    return results
+    return {
+        "results": results,
+        "total_credit": total_credit
+    }
