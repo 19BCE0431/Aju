@@ -63,9 +63,20 @@ async def upload(file: UploadFile = File(...)):
         text = page.get_text()
         lines = text.split("\n")
 
+        # for line in lines:
+        #     if re.search(r'\d{2}/\d{2}/\d{2}', line):
+        #         documents.append(parse_row(line))
+
         for line in lines:
             if re.search(r'\d{2}/\d{2}/\d{2}', line):
-                documents.append(parse_row(line))
+                parsed = parse_row(line)
+        
+                # 🔥 DEBUG PRINT
+                print("RAW LINE:", line)
+                print("PARSED:", parsed)
+                print("------")
+        
+                documents.append(parsed)
 
     return {"message": f"{len(documents)} rows processed"}
 
