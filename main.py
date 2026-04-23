@@ -42,7 +42,25 @@ def parse_row(text):
     #     else:
     #         credit = txn
 
-    numbers = re.findall(r"\d+(?:,\d{3})*(?:\.\d{2})?", text)
+    # numbers = re.findall(r"\d+(?:,\d{3})*(?:\.\d{2})?", text)
+    # numbers = [float(n.replace(",", "")) for n in numbers]
+    
+    # debit, credit, balance = 0, 0, 0
+    
+    # if len(numbers) >= 2:
+    #     balance = numbers[-1]
+    #     txn = numbers[-2]
+    
+    #     # 🔥 KEY LOGIC
+    #     # If only 2 numbers → assume credit
+    #     if len(numbers) == 2:
+    #         credit = txn
+    #     else:
+    #         # If 3+ numbers → assume format has both debit & credit
+    #         debit = numbers[-3]
+    #         credit = txn
+
+    numbers = re.findall(r"\d{1,3}(?:,\d{3})*\.\d{2}", text)
     numbers = [float(n.replace(",", "")) for n in numbers]
     
     debit, credit, balance = 0, 0, 0
@@ -51,14 +69,9 @@ def parse_row(text):
         balance = numbers[-1]
         txn = numbers[-2]
     
-        # 🔥 KEY LOGIC
-        # If only 2 numbers → assume credit
-        if len(numbers) == 2:
-            credit = txn
-        else:
-            # If 3+ numbers → assume format has both debit & credit
-            debit = numbers[-3]
-            credit = txn
+        # Since PDF loses column structure:
+        # assume single amount = credit (safe default)
+        credit = txn
 
     # Clean name
     name = text
