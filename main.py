@@ -24,34 +24,40 @@ def parse_row(text):
 
     date = date_match.group()
 
-    # Extract amounts
-    # numbers = re.findall(r"\d{1,3}(?:,\d{3})*\.\d{2}", text)
+    # numbers = re.findall(r"\d+(?:,\d{3})*(?:\.\d{2})?", text)
     # numbers = [float(n.replace(",", "")) for n in numbers]
-    numbers = re.findall(r"\d+(?:,\d{3})*(?:\.\d{2})?", text)
-    numbers = [float(n.replace(",", "")) for n in numbers]
+
 
     # debit, credit, balance = 0, 0, 0
 
-    # if len(numbers) == 2:
-    #     debit = numbers[0]
-    #     balance = numbers[1]
-    # elif len(numbers) >= 3:
-    #     debit = numbers[0]
-    #     credit = numbers[1]
+    # if len(numbers) >= 2:
     #     balance = numbers[-1]
+    
+    #     # Transaction amount is second last
+    #     txn = numbers[-2]
+    
+    #     # Decide debit/credit using keywords
+    #     if any(x in text.lower() for x in ["upi", "pay", "purchase", "debit"]):
+    #         debit = txn
+    #     else:
+    #         credit = txn
 
+    numbers = re.findall(r"\d+(?:,\d{3})*(?:\.\d{2})?", text)
+    numbers = [float(n.replace(",", "")) for n in numbers]
+    
     debit, credit, balance = 0, 0, 0
-
+    
     if len(numbers) >= 2:
         balance = numbers[-1]
-    
-        # Transaction amount is second last
         txn = numbers[-2]
     
-        # Decide debit/credit using keywords
-        if any(x in text.lower() for x in ["upi", "pay", "purchase", "debit"]):
-            debit = txn
+        # 🔥 KEY LOGIC
+        # If only 2 numbers → assume credit
+        if len(numbers) == 2:
+            credit = txn
         else:
+            # If 3+ numbers → assume format has both debit & credit
+            debit = numbers[-3]
             credit = txn
 
     # Clean name
