@@ -1,9 +1,6 @@
-fastapi
-uvicorn
-pymupdf
-rapidfuzz
-python-multipart
-streamlit
-pandas
-requests
-PyMuPDF
+fastapi==0.115.12
+uvicorn[standard]==0.34.2
+python-multipart==0.0.20
+PyMuPDF==1.24.9
+rapidfuzz==3.13.0
+pandas==2.2.3
