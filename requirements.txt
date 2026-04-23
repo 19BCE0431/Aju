@@ -1,4 +1,8 @@
 fastapi
 uvicorn
-pdfplumber
+pymupdf
+rapidfuzz
 python-multipart
+streamlit
+pandas
+requests
