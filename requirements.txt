@@ -1,8 +1,7 @@
 fastapi
-uvicorn
+uvicorn[standard]
 PyMuPDF
 rapidfuzz
 python-multipart
-streamlit
 pandas
 requests
