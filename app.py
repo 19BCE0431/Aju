@@ -67,9 +67,11 @@ API_URL = "https://aju-production.up.railway.app"
 st.title("📊 Financial PDF Smart Search")
 
 file = st.file_uploader("Upload your PDF")
+# files = {"file": (file.name, file.getvalue(), "application/pdf")}
 
 if file:
     files = {"file": file.getvalue()}
+    files = {"file": (file.name, file.getvalue(), "application/pdf")}
     res = requests.post(f"{API_URL}/upload", files=files)
 
     if res.status_code == 200:
