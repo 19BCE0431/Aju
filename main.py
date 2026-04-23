@@ -1,56 +1,111 @@
 from fastapi import FastAPI, UploadFile, File
-import pdfplumber
+import fitz  # PyMuPDF
+import re
+from rapidfuzz import fuzz
 
 app = FastAPI()
 
 documents = []
 
+# ---------------------------
+# PARSE FUNCTION (CLEAN)
+# ---------------------------
+def parse_row(text):
+    text = " ".join(text.split())
+
+    # Skip header rows
+    if "date" in text.lower() and "balance" in text.lower():
+        return None
+
+    # Extract date
+    date_match = re.search(r"\d{2}/\d{2}/\d{2}", text)
+    if not date_match:
+        return None
+
+    date = date_match.group()
+
+    # Extract amounts
+    numbers = re.findall(r"\d{1,3}(?:,\d{3})*\.\d{2}", text)
+    numbers = [float(n.replace(",", "")) for n in numbers]
+
+    debit, credit, balance = 0, 0, 0
+
+    if len(numbers) == 2:
+        debit = numbers[0]
+        balance = numbers[1]
+    elif len(numbers) >= 3:
+        debit = numbers[0]
+        credit = numbers[1]
+        balance = numbers[-1]
+
+    # Clean name
+    name = text
+    name = re.sub(r"\d{2}/\d{2}/\d{2}", "", name)
+    name = re.sub(r"\d{1,3}(?:,\d{3})*\.\d{2}", "", name)
+    name = re.sub(r"\b\d+\b", "", name)
+    name = re.sub(r"[^\w\s]", "", name)
+    name = " ".join(name.split())
+
+    if len(name) < 3:
+        return None
+
+    return {
+        "date": date,
+        "name": name,
+        "debit": debit,
+        "credit": credit,
+        "balance": balance,
+        "text": text.lower()
+    }
+
+
+# ---------------------------
+# UPLOAD API
+# ---------------------------
 @app.post("/upload")
 async def upload(file: UploadFile = File(...)):
     global documents
     documents = []
 
-    import tempfile
+    content = await file.read()
+    doc = fitz.open(stream=content, filetype="pdf")
 
-    with tempfile.NamedTemporaryFile(delete=False) as tmp:
-        tmp.write(await file.read())
-        tmp_path = tmp.name
+    lines = []
 
-    with pdfplumber.open(tmp_path) as pdf:
-        for page in pdf.pages:
-            tables = page.extract_tables()
+    for page in doc:
+        text = page.get_text()
+        lines.extend(text.split("\n"))
 
-            for table in tables:
-                for row in table:
-                    if not row or len(row) < 7:
-                        continue
+    current_block = ""
 
-                    try:
-                        date = row[0]
-                        name = row[1]
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
 
-                        if not date or "Date" in str(date):
-                            continue
+        # New transaction starts with date
+        if re.match(r"\d{2}/\d{2}/\d{2}", line):
+            if current_block:
+                parsed = parse_row(current_block)
+                if parsed:
+                    documents.append(parsed)
 
-                        debit = float(row[4].replace(",", "")) if row[4] else 0
-                        credit = float(row[5].replace(",", "")) if row[5] else 0
-                        balance = float(row[6].replace(",", "")) if row[6] else 0
+            current_block = line
+        else:
+            current_block += " " + line
 
-                        documents.append({
-                            "date": date,
-                            "name": name.strip(),
-                            "debit": debit,
-                            "credit": credit,
-                            "balance": balance
-                        })
-
-                    except:
-                        continue
+    # Last block
+    if current_block:
+        parsed = parse_row(current_block)
+        if parsed:
+            documents.append(parsed)
 
     return {"message": f"{len(documents)} rows processed"}
 
-from rapidfuzz import fuzz
 
+# ---------------------------
+# SEARCH API (FUZZY)
+# ---------------------------
 @app.get("/search")
 def search(q: str):
     q = q.lower().strip()
@@ -60,18 +115,15 @@ def search(q: str):
     for doc in documents:
         name = doc.get("name", "").lower()
 
-        # Fuzzy match instead of strict match
         score = fuzz.partial_ratio(q, name)
 
-        if score > 70:   # threshold
+        if score > 70:
             doc["score"] = score
             results.append(doc)
 
-    # Sort best match first
     results.sort(key=lambda x: x["score"], reverse=True)
 
     return {
         "results": results,
         "total_credit": sum(r["credit"] for r in results)
     }
-
