@@ -12,7 +12,6 @@ async def upload(file: UploadFile = File(...)):
 
     import tempfile
 
-    # Save temp file
     with tempfile.NamedTemporaryFile(delete=False) as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
@@ -23,21 +22,19 @@ async def upload(file: UploadFile = File(...)):
 
             for table in tables:
                 for row in table:
-                    if not row or len(row) < 6:
+                    if not row or len(row) < 7:
                         continue
 
                     try:
                         date = row[0]
                         name = row[1]
 
-                        # Skip headers
-                        if "Date" in str(date):
+                        if not date or "Date" in str(date):
                             continue
 
-                        # Clean values
                         debit = float(row[4].replace(",", "")) if row[4] else 0
                         credit = float(row[5].replace(",", "")) if row[5] else 0
-                        balance = float(row[6].replace(",", "")) if len(row) > 6 and row[6] else 0
+                        balance = float(row[6].replace(",", "")) if row[6] else 0
 
                         documents.append({
                             "date": date,
@@ -55,9 +52,9 @@ async def upload(file: UploadFile = File(...)):
 
 @app.get("/search")
 def search(q: str):
-    q = q.lower().strip()
+    q = q.lower()
 
-    results = [doc for doc in documents if q in doc["name"].lower()]
+    results = [d for d in documents if q in d["name"].lower()]
 
     total_credit = sum(r["credit"] for r in results)
 
