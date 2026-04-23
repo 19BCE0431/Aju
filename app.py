@@ -1,17 +1,49 @@
+import streamlit as st
+import requests
 import pandas as pd
 
-data = response["results"]
+API_URL = "https://aju-production.up.railway.app"
 
-if len(data) == 0:
-    st.warning("No results found")
-else:
-    df = pd.DataFrame(data)
+st.title("📊 Financial PDF Smart Search")
 
-    # Ensure columns exist
-    for col in ["debit", "credit", "balance"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+# Upload PDF
+file = st.file_uploader("Upload your PDF")
 
-    st.dataframe(df)
+if file:
+    files = {"file": file.getvalue()}
 
-    st.markdown(f"### 💰 Total Credit: ₹ {response['total_credit']}")
+    res = requests.post(f"{API_URL}/upload", files=files)
+
+    if res.status_code == 200:
+        st.success("✅ PDF uploaded & processed")
+    else:
+        st.error("❌ Upload failed")
+
+# Search
+query = st.text_input("🔍 Search (example: chethana)")
+
+if query:
+    res = requests.get(f"{API_URL}/search", params={"q": query})
+
+    if res.status_code == 200:
+        response = res.json()   # ✅ IMPORTANT
+
+        data = response.get("results", [])
+
+        if len(data) == 0:
+            st.warning("No results found")
+        else:
+            df = pd.DataFrame(data)
+
+            # Safe numeric conversion
+            for col in ["debit", "credit", "balance"]:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+            st.subheader("Results")
+            st.dataframe(df)
+
+            st.markdown(f"### 💰 Total Credit: ₹ {response.get('total_credit', 0)}")
+
+    else:
+        st.error("Search failed")
