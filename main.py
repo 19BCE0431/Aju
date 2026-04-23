@@ -49,16 +49,29 @@ async def upload(file: UploadFile = File(...)):
 
     return {"message": f"{len(documents)} rows processed"}
 
+from rapidfuzz import fuzz
 
 @app.get("/search")
 def search(q: str):
-    q = q.lower()
+    q = q.lower().strip()
 
-    results = [d for d in documents if q in d["name"].lower()]
+    results = []
 
-    total_credit = sum(r["credit"] for r in results)
+    for doc in documents:
+        name = doc.get("name", "").lower()
+
+        # Fuzzy match instead of strict match
+        score = fuzz.partial_ratio(q, name)
+
+        if score > 70:   # threshold
+            doc["score"] = score
+            results.append(doc)
+
+    # Sort best match first
+    results.sort(key=lambda x: x["score"], reverse=True)
 
     return {
         "results": results,
-        "total_credit": total_credit
+        "total_credit": sum(r["credit"] for r in results)
     }
+
